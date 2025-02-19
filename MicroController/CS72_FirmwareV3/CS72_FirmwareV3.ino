@@ -24,7 +24,7 @@
 #define FEED_HOMING_SENSOR A3  //connects to the feed wheel homing sensor
 #define FEED_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches) 
 #define FEEDSENSOR_ENABLED true //enabled if feedsensor is installed and working;//this is a proximity sensor under the feed tube which tells us a case has dropped completely
-#define FEEDSENSOR_TYPE 0 // NPN = 0 (default), PNP = 1
+#define FEEDSENSOR_TYPE 1 // NPN = 0 (default), PNP = 1
 #define FEED_HOMING_ENABLED true //enabled feed homing sensor
 #define FEED_HOMING_OFFSET_STEPS 3 //additional steps to continue after homing sensor triggered
 #define FEED_STEPS 70  //The amount to travel before starting the homing cycle. Should be less than (80 - FEED_HOMING_OFFSET_STEPS)
@@ -44,6 +44,7 @@
 #define SORT_ENABLE 4 //SORT motor enable control
 #define SORT_MICROSTEPS 16 //how many microsteps the controller is configured for. 
 #define SORT_HOMING_SENSOR A2  //connects to the sorter homing sensor
+#define SORT_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches)
 #define SORT_HOMING_ENABLED true //home sorter on startup and 0
 
 #define SORT_MOTOR_SPEED 90 //range of 1-100
@@ -55,8 +56,8 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 1200 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
-#define SORT_CURRENT 1200 //mA - 900 is default .9 amp.
+#define FEED_CURRENT 1000 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
+#define SORT_CURRENT 1000 //mA - 900 is default .9 amp.
 
 //AIRDROP / 12v signaling
 #define AIR_DROP_ENABLED false //enables airdrop
@@ -223,10 +224,10 @@ void setup() {
   pinMode(FEED_DONE_SIGNAL, OUTPUT);
   pinMode(FEED_HOMING_SENSOR, INPUT);
   pinMode(SORT_HOMING_SENSOR, INPUT);
-  pinMode(FEED_SENSOR, INPUT);
+  pinMode(FEED_SENSOR, INPUT_PULLUP);
 
    pinMode(CASEFAN_PWM, OUTPUT);
-    pinMode(CAMERA_LED_PWM, OUTPUT);
+   pinMode(CAMERA_LED_PWM, OUTPUT);
 
 
     adjustCameraLED(cameraLEDLevel);
@@ -888,7 +889,7 @@ void homeSortMotor(){
      
     if(IsSorting==true){
         //code for running sort
-         if(digitalRead(SORT_HOMING_SENSOR)==0){
+         if(digitalRead(SORT_HOMING_SENSOR)!=SORT_HOMING_SENSOR_TYPE){
           if(homingSteps < (200*SORT_MICROSTEPS)){
               stepSortMotor(true);  
               homingSteps++;          
@@ -900,7 +901,7 @@ void homeSortMotor(){
          IsSortHoming =false;
     }
     else{
-      if(digitalRead(SORT_HOMING_SENSOR)==0){
+      if(digitalRead(SORT_HOMING_SENSOR)!=SORT_HOMING_SENSOR_TYPE){
           if(homingSteps < (200*SORT_MICROSTEPS)){
               stepSortMotor(true);  
               homingSteps++;          
