@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250101.1 ///
+/// VERSION CS 7.2.250328.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -6,7 +6,7 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250101.1"
+#define FIRMWARE_VERSION "7.2.250328.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -20,6 +20,7 @@
 #define FEED_ENABLE A0 //Feed motor enable controll pin
 #define FEED_UART_RX A4 //FEED UART RX COMMS 
 #define FEED_UART_TX A5 //FEED UART TX COMMS 
+#define FEED_IN_REVERSE false //set to true to reverse direction of feed motor. 
 #define FEED_MICROSTEPS 16  //how many microsteps the controller is configured for. 
 #define FEED_HOMING_SENSOR A3  //connects to the feed wheel homing sensor
 #define FEED_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches) 
@@ -31,7 +32,7 @@
 #define FEED_OVERSTEP_THRESHOLD 90 //if we have gone this many steps without hitting a homing node, something is wrong. Throw an overstep error
 #define FEED_DONE_SIGNAL 12   // Writes HIGH Signal When Feed is done. Used for mods like AirDrop
 
-#define FEED_MOTOR_SPEED 98 //range of 1-100
+#define FEED_MOTOR_SPEED 90 //range of 1-100
 //FEED MOTOR SPEED / ACCELLERATION SETTINGS (DISABLED BY DEFAULT)
 #define FEED_ACC_SLOPE 32  //2 steps * 16 MicroStes
 #define ACC_FEED_ENABLED false //enabled or disables feed motor accelleration. 
@@ -42,6 +43,7 @@
 #define SORT_UART_RX 5 //SORT UART RX COMMS
 #define SORT_UART_TX 6 //SORT UART TX COMMS
 #define SORT_ENABLE 4 //SORT motor enable control
+#define SORT_IN_REVERSE false //reverse direction of sorter motor
 #define SORT_MICROSTEPS 16 //how many microsteps the controller is configured for. 
 #define SORT_HOMING_SENSOR A2  //connects to the sorter homing sensor
 #define SORT_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches)
@@ -56,8 +58,8 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 1000 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
-#define SORT_CURRENT 1000 //mA - 900 is default .9 amp.
+#define FEED_CURRENT 900 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
+#define SORT_CURRENT 1100 //mA - 1100 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
 #define AIR_DROP_ENABLED false //enables airdrop
@@ -75,7 +77,7 @@
 
 // Used to send signal to add-ons when feed cycle completes (used by airdrop mod). 
 // IF NOT USING MODS, SET TO 0. With Airdrop set to 60-100 (length of the airblast)
-#define FEED_CYCLE_COMPLETE_SIGNALTIME 60 
+#define FEED_CYCLE_COMPLETE_SIGNALTIME 100 
 
 // The amount of time to wait after the feed completes before sending the FEED_CYCLE_COMPLETE SIGNAL
 // IF NOT USING MODS, SET TO 0. with Airdrop set to 30-50 which allows the brass to start falling before sending the blast of air. 
@@ -93,7 +95,7 @@
 // number of MS to wait after feedcycle before moving sort arm.
 // Prevents slinging brass. 
 // This gives time for the brass to clear the sort tube before moving the sort arm. 
-#define SLOT_DROP_DELAY 0
+#define SLOT_DROP_DELAY 100
 
 
 ///END OF USER CONFIGURATIONS ///
@@ -108,7 +110,7 @@ int feedCyclePreDelay = FEED_CYCLE_COMPLETE_PRESIGNALDELAY;
 int feedCyclePostDelay = FEED_CYCLE_COMPLETE_POSTDELAY;
 int slotDropDelay = SLOT_DROP_DELAY;
 int dropDelay =  airDropEnabled ? feedCyclePostDelay : slotDropDelay;
-
+int feedDirection = FEED_IN_REVERSE == false;
 long autoMotorStandbyTimeout = AUTO_MOTORSTANDBY_TIMEOUT;
 
 int feedSpeed = FEED_MOTOR_SPEED; //represents a number between 1-100
@@ -207,7 +209,7 @@ void setup() {
 
     //uint8_t temperature = sortmotorUART.
   //Serial.print(F("SORT microsteps: "));   Serial.println(sortmotorUART.microsteps());
-  Serial.print(F("SORT current: "));   Serial.println(sortmotorUART.rms_current()); 
+ // Serial.print(F("SORT current: "));   Serial.println(sortmotorUART.rms_current()); 
   //Serial.print(F("SORT Stealth: "));   Serial.println(sortmotorUART.stealth()); 
   
   //Serial.print(F("FEED microsteps: "));   Serial.println(feedmotorUART.microsteps());
@@ -242,7 +244,7 @@ void setup() {
     adjustCameraLED(cameraLEDLevel);
     adjustFanLevel(caseFanLevel);
 
-  digitalWrite(FEED_DIRPIN, LOW);
+  digitalWrite(FEED_DIRPIN, feedDirection);
  
   jogSorter();
 
@@ -746,15 +748,17 @@ void setAccSortDelay(){
     }
     
 }
+bool sortDirection = false;
 void stepSortMotor(bool forward){
+     sortDirection = forward == SORT_IN_REVERSE;
      digitalWrite(SORT_ENABLE, LOW);
      if(forward==true){
-       digitalWrite(SORT_DIRPIN, HIGH);
+       digitalWrite(SORT_DIRPIN, sortDirection);
      }else{
-      digitalWrite(SORT_DIRPIN, LOW);
+      digitalWrite(SORT_DIRPIN, sortDirection);
     }
     digitalWrite(SORT_STEPPIN, HIGH);
-    delayMicroseconds(3);  //pulse width
+    delayMicroseconds(10);  //pulse width
     digitalWrite(SORT_STEPPIN, LOW);
     delayMicroseconds(sortDelayMS); //controls motor speed
 }
@@ -1062,7 +1066,7 @@ void adjustFanLevel(int level)
   fanPercentConversion = level * 2.55;
   level = 255 - fanPercentConversion; // the mosfet works backwards. 0 is full speed 255 is slowest. 
   analogWrite(CASEFAN_PWM, level);
-  Serial.println(level);
+  //Serial.println(level);
   caseFanLevel = level;
  }
 
