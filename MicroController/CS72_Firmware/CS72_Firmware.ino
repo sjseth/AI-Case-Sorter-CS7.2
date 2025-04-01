@@ -58,7 +58,7 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 900 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
+#define FEED_CURRENT 1000 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
 #define SORT_CURRENT 1100 //mA - 1100 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
