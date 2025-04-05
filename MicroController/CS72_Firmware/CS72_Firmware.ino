@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250101.1 ///
+/// VERSION CS 7.2.250328.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -6,7 +6,10 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250101.1"
+#define FIRMWARE_VERSION "7.2.250328.1"
+
+#define CASEFAN_PWM A1 //controls case fan speed
+#define CASEFAN_LEVEL 100 //0-100 
 
 #define CAMERA_LED_PWM 11 //the output pin for the digital PWM 
 #define CAMERA_LED_LEVEL  200 //camera brightness if using digital PWM, otherwise ignored 
@@ -17,18 +20,19 @@
 #define FEED_ENABLE 9 //Feed motor enable controll pin
 #define FEED_UART_RX A4 //FEED UART RX COMMS 
 #define FEED_UART_TX A5 //FEED UART TX COMMS 
+#define FEED_IN_REVERSE false //set to true to reverse direction of feed motor. 
 #define FEED_MICROSTEPS 16  //how many microsteps the controller is configured for. 
 #define FEED_HOMING_SENSOR A3  //connects to the feed wheel homing sensor
 #define FEED_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches) 
 #define FEEDSENSOR_ENABLED true //enabled if feedsensor is installed and working;//this is a proximity sensor under the feed tube which tells us a case has dropped completely
-#define FEEDSENSOR_TYPE 0 // NPN = 0 (default), PNP = 1
+#define FEEDSENSOR_TYPE 1 // NPN = 0 (default), PNP = 1
 #define FEED_HOMING_ENABLED true //enabled feed homing sensor
 #define FEED_HOMING_OFFSET_STEPS 3 //additional steps to continue after homing sensor triggered
 #define FEED_STEPS 70  //The amount to travel before starting the homing cycle. Should be less than (80 - FEED_HOMING_OFFSET_STEPS)
 #define FEED_OVERSTEP_THRESHOLD 90 //if we have gone this many steps without hitting a homing node, something is wrong. Throw an overstep error
 #define FEED_DONE_SIGNAL 12   // Writes HIGH Signal When Feed is done. Used for mods like AirDrop
 
-#define FEED_MOTOR_SPEED 98 //range of 1-100
+#define FEED_MOTOR_SPEED 90 //range of 1-100
 //FEED MOTOR SPEED / ACCELLERATION SETTINGS (DISABLED BY DEFAULT)
 #define FEED_ACC_SLOPE 32  //2 steps * 16 MicroStes
 #define ACC_FEED_ENABLED false //enabled or disables feed motor accelleration. 
@@ -39,10 +43,12 @@
 #define SORT_UART_RX 5 //SORT UART RX COMMS
 #define SORT_UART_TX 6 //SORT UART TX COMMS
 #define SORT_ENABLE 4 //SORT motor enable control
+#define SORT_IN_REVERSE false //reverse direction of sorter motor
 #define SORT_MICROSTEPS 16 //how many microsteps the controller is configured for. 
 #define SORT_HOMING_SENSOR A2  //connects to the sorter homing sensor
+#define SORT_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches)
 #define SORT_HOMING_ENABLED true //home sorter on startup and 0
-
+#define SORT_HOMING_OFFSET_STEPS 0 //additional steps to continue after homing sensor triggered
 #define SORT_MOTOR_SPEED 90 //range of 1-100
 //SORT MOTOR SPEED / ACCELLERATION SETTINGS (ENABLED BY DEFAULT)
 #define ACC_SORT_ENABLED true // default true
@@ -52,8 +58,8 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 900 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
-#define SORT_CURRENT 900 //mA - 900 is default .9 amp.
+#define FEED_CURRENT 1000 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
+#define SORT_CURRENT 1100 //mA - 1100 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
 #define AIR_DROP_ENABLED false //enables airdrop
@@ -71,7 +77,7 @@
 
 // Used to send signal to add-ons when feed cycle completes (used by airdrop mod). 
 // IF NOT USING MODS, SET TO 0. With Airdrop set to 60-100 (length of the airblast)
-#define FEED_CYCLE_COMPLETE_SIGNALTIME 60 
+#define FEED_CYCLE_COMPLETE_SIGNALTIME 100 
 
 // The amount of time to wait after the feed completes before sending the FEED_CYCLE_COMPLETE SIGNAL
 // IF NOT USING MODS, SET TO 0. with Airdrop set to 30-50 which allows the brass to start falling before sending the blast of air. 
@@ -89,13 +95,14 @@
 // number of MS to wait after feedcycle before moving sort arm.
 // Prevents slinging brass. 
 // This gives time for the brass to clear the sort tube before moving the sort arm. 
-#define SLOT_DROP_DELAY 300
+#define SLOT_DROP_DELAY 100
 
 
 ///END OF USER CONFIGURATIONS ///
 ///DO NOT EDIT BELOW THIS LINE ///
 int cameraLEDLevel = CAMERA_LED_LEVEL; 
-
+int caseFanLevel = CASEFAN_LEVEL;
+double fanPercentConversion=0;
 int notificationDelay = FEED_CYCLE_NOTIFICATION_DELAY;
 bool airDropEnabled = AIR_DROP_ENABLED;
 int feedCycleSignalTime = FEED_CYCLE_COMPLETE_SIGNALTIME;
@@ -103,7 +110,7 @@ int feedCyclePreDelay = FEED_CYCLE_COMPLETE_PRESIGNALDELAY;
 int feedCyclePostDelay = FEED_CYCLE_COMPLETE_POSTDELAY;
 int slotDropDelay = SLOT_DROP_DELAY;
 int dropDelay =  airDropEnabled ? feedCyclePostDelay : slotDropDelay;
-
+int feedDirection = FEED_IN_REVERSE == false;
 long autoMotorStandbyTimeout = AUTO_MOTORSTANDBY_TIMEOUT;
 
 int feedSpeed = FEED_MOTOR_SPEED; //represents a number between 1-100
@@ -146,7 +153,16 @@ bool SortInProgress = false;
 bool SortComplete = false;
 bool IsSorting = false;
 bool IsSortHoming = false;
+
+int sortOffsetSteps = SORT_HOMING_OFFSET_STEPS;
+int sortHomingOffset = sortOffsetSteps * SORT_MICROSTEPS;
+bool IsSortHomingOffset = false;
+int SortHomingOffsetSteps = sortHomingOffset;
+bool sorterIsHomed = false;
+
 int slotDelayCalc = 0;
+
+
 
 bool IsTestCycle=false;
 bool IsSortTestCycle=false;
@@ -193,7 +209,7 @@ void setup() {
 
     //uint8_t temperature = sortmotorUART.
   //Serial.print(F("SORT microsteps: "));   Serial.println(sortmotorUART.microsteps());
-  Serial.print(F("SORT current: "));   Serial.println(sortmotorUART.rms_current()); 
+ // Serial.print(F("SORT current: "));   Serial.println(sortmotorUART.rms_current()); 
   //Serial.print(F("SORT Stealth: "));   Serial.println(sortmotorUART.stealth()); 
   
   //Serial.print(F("FEED microsteps: "));   Serial.println(feedmotorUART.microsteps());
@@ -219,16 +235,18 @@ void setup() {
   pinMode(FEED_DONE_SIGNAL, OUTPUT);
   pinMode(FEED_HOMING_SENSOR, INPUT);
   pinMode(SORT_HOMING_SENSOR, INPUT);
-  pinMode(FEED_SENSOR, INPUT);
+  pinMode(FEED_SENSOR, INPUT_PULLUP);
+
+   pinMode(CASEFAN_PWM, OUTPUT);
+   pinMode(CAMERA_LED_PWM, OUTPUT);
 
 
-    pinMode(CAMERA_LED_PWM, OUTPUT);
     adjustCameraLED(cameraLEDLevel);
+    adjustFanLevel(caseFanLevel);
 
-
-  digitalWrite(FEED_DIRPIN, LOW);
-
-  
+  digitalWrite(FEED_DIRPIN, feedDirection);
+ 
+  jogSorter();
 
   IsFeedHoming=true;
   IsSortHoming=true;
@@ -296,6 +314,7 @@ void checkSerial(){
           FeedScheduled=false;
           IsFeedHoming=false;
           IsFeedHomingOffset = false;
+          IsSortHomingOffset = false;
           FeedCycleComplete=true;
           FeedCycleInProgress = false;
           IsTestCycle=false;
@@ -323,6 +342,9 @@ void checkSerial(){
       } 
       if (input.startsWith("homesorter")) {
         sortDelayMS=400;
+           jogSorter();
+        qPos1 = 0;
+        qPos2 = 0;
           IsSortHoming=true;
           Serial.print("ok\n");
           resetCommand();
@@ -383,6 +405,9 @@ void checkSerial(){
 
         Serial.print(",\"FeedHomingOffset\":");
         Serial.print(feedOffsetSteps);
+
+        Serial.print(",\"SortHomingOffset\":");
+        Serial.print(sortOffsetSteps);
         
         Serial.print(",\"AutoMotorStandbyTimeout\":");
         Serial.print(autoMotorStandbyTimeout);
@@ -416,8 +441,18 @@ void checkSerial(){
         resetCommand();
         return;
       }
+      if (input.startsWith("sorthomingoffset:")) {
+        input.replace("sorthomingoffset:", "");
+        sortOffsetSteps = input.toInt(); //3
+        sortHomingOffset = sortOffsetSteps * SORT_MICROSTEPS; //48
+        SortHomingOffsetSteps = sortHomingOffset; //48
 
-       if (input.startsWith("sortspeed:")) {
+        Serial.print("ok\n");
+        resetCommand();
+        return;
+      }
+
+      if (input.startsWith("sortspeed:")) {
         input.replace("sortspeed:", "");
         sortSpeed = input.toInt();
         setSorterMotorSpeed(sortSpeed);
@@ -491,7 +526,14 @@ void checkSerial(){
         resetCommand();
         return;
       }
-
+      if (input.startsWith("fan:")) {
+        input.replace("fan:", "");
+        caseFanLevel = input.toInt();
+        adjustFanLevel(caseFanLevel);
+        Serial.print("ok\n");
+        resetCommand();
+        return;
+      }
       if (input.startsWith("automotorstandbytimeout:")) {
         input.replace("automotorstandbytimeout:", "");
         autoMotorStandbyTimeout = input.toDouble();
@@ -706,15 +748,17 @@ void setAccSortDelay(){
     }
     
 }
+bool sortDirection = false;
 void stepSortMotor(bool forward){
+     sortDirection = forward == SORT_IN_REVERSE;
      digitalWrite(SORT_ENABLE, LOW);
      if(forward==true){
-       digitalWrite(SORT_DIRPIN, HIGH);
+       digitalWrite(SORT_DIRPIN, sortDirection);
      }else{
-      digitalWrite(SORT_DIRPIN, LOW);
+      digitalWrite(SORT_DIRPIN, sortDirection);
     }
     digitalWrite(SORT_STEPPIN, HIGH);
-    delayMicroseconds(3);  //pulse width
+    delayMicroseconds(10);  //pulse width
     digitalWrite(SORT_STEPPIN, LOW);
     delayMicroseconds(sortDelayMS); //controls motor speed
 }
@@ -864,41 +908,76 @@ void homeFeedMotor(){
   }
 }
 
+
 void homeSortMotor(){
   if(IsSortHoming==true && SORT_HOMING_ENABLED == false){
      IsSorting=false;
          SortComplete = true;
          IsSortHoming =false;
+         IsSortHomingOffset = false;
          return;
-    }
+  }
   if(IsSortHoming==true){
-     
+     //if a sort is in progress and the arm is moving from any position to zero
+     //this code is reached when the steps have been completed to go to zero
+     //we are going to check if the homing sensor is not activated (which it should be as we are at zero), 
+     //if not, we are going to step the motor until it is or we have reached 200 steps (1 complete turn)
     if(IsSorting==true){
-        //code for running sort
-         if(digitalRead(SORT_HOMING_SENSOR)==0){
+         if(digitalRead(SORT_HOMING_SENSOR)!=SORT_HOMING_SENSOR_TYPE){ //
           if(homingSteps < (200*SORT_MICROSTEPS)){
               stepSortMotor(true);  
-              homingSteps++;          
+              homingSteps++; 
           }
           return;
          }
          IsSorting=false;
          SortComplete = true;
          IsSortHoming =false;
+         homingSteps=0;
+         return;
     }
-    else{
-      if(digitalRead(SORT_HOMING_SENSOR)==0){
-          if(homingSteps < (200*SORT_MICROSTEPS)){
+    //else if we are not doing an offset move (post homing) and the sensor is not 
+    //activated, lets keep moving until it is or we hit 210 homing steps (otherwise we turn indefinitely)
+    else if(IsSortHomingOffset != true){
+      if(digitalRead(SORT_HOMING_SENSOR)!=SORT_HOMING_SENSOR_TYPE){
+          if(homingSteps < (210*SORT_MICROSTEPS)){
               stepSortMotor(true);  
               homingSteps++;          
           }
-      }else{
+      }else{ //we are homed! Time to schedule an offset move and reset the homing steps counter. 
+        IsSortHomingOffset=true;
+        SortHomingOffsetSteps = sortHomingOffset;
+        homingSteps = 0;
+      }
+    }
+
+   //If sort homing offset true, means we are in offset steps
+    if(IsSortHomingOffset == true){
+      if(sortHomingOffset == 0) //if there are no offset steps, we are done
+      {
+        IsSortHomingOffset = false;
         IsSortHoming=false;
-       // Serial.println("homed!");
+        SortComplete=true;
+        return;
+      }
+      if(SortHomingOffsetSteps > 0){
+        stepSortMotor(true);
+        SortHomingOffsetSteps--;
+      }
+      else if(IsSortHomingOffset == true && SortHomingOffsetSteps<=0){
+        IsSortHomingOffset = false;
+        IsSortHoming=false;
+        SortComplete=true;
+        homingSteps=0;
       }
     }
   }
+
+
+ 
 }
+
+
 
 void stepFeedMotor(){
     digitalWrite(FEED_ENABLE, LOW);
@@ -980,3 +1059,22 @@ void adjustCameraLED(int level)
    cameraLEDLevel = level;
  }
 
+
+
+void adjustFanLevel(int level)
+{
+  fanPercentConversion = level * 2.55;
+  level = 255 - fanPercentConversion; // the mosfet works backwards. 0 is full speed 255 is slowest. 
+  analogWrite(CASEFAN_PWM, level);
+  //Serial.println(level);
+  caseFanLevel = level;
+ }
+
+
+int js=0;
+int jogSteps = 25 * SORT_MICROSTEPS;
+void jogSorter(){
+    for(js=0;js<jogSteps;js++){
+      stepSortMotor(false);
+    }
+}
