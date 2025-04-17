@@ -1,12 +1,17 @@
-/// VERSION CS 7.2.250328.1 ///
+/// VERSION CS 7.2.250416.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
-///#include <MultiStepper.h>
-#include <TMCStepper.h>
+//You may need to add the TMCStepper library to your Arduino IDE.
+//In the Sketch menu, select Include Library -> Manage Libraries
+//In the library manager search for "TMCStepper". Find the TMCStepper library by teemuatlut and click the Install button. 
+//You may have to close and reopen the Arduino IDE before the library is recognized
+//at this time of this firmware version we are using TMCStepper 0.7.3.
+#include <TMCStepper.h> 
+
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250328.1"
+#define FIRMWARE_VERSION "7.2.250416.1"
 
 #define CASEFAN_PWM A1 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
