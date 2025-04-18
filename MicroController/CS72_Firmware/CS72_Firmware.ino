@@ -11,7 +11,7 @@
 
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250417.1"
+#define FIRMWARE_VERSION "7.2.250418.1"
 
 #define CASEFAN_PWM A1 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -23,8 +23,11 @@
 #define FEED_DIRPIN 8 //DIRECTION signal for the feed motor direction
 #define FEED_STEPPIN 7 //PULSE signal for the feed motor steps
 #define FEED_ENABLE 9 //Feed motor enable controll pin
+
+//UART COMS
 #define FEED_UART_RX A4 //FEED UART RX COMMS 
 #define FEED_UART_TX A5 //FEED UART TX COMMS 
+
 #define FEED_IN_REVERSE false //set to true to reverse direction of feed motor. 
 #define FEED_MICROSTEPS 16  //how many microsteps the controller is configured for. 
 #define FEED_HOMING_SENSOR A3  //connects to the feed wheel homing sensor
@@ -32,9 +35,9 @@
 #define FEEDSENSOR_ENABLED true //enabled if feedsensor is installed and working;//this is a proximity sensor under the feed tube which tells us a case has dropped completely
 #define FEEDSENSOR_TYPE 1 // NPN = 0 (default), PNP = 1
 #define FEED_HOMING_ENABLED true //enabled feed homing sensor
-#define FEED_HOMING_OFFSET_STEPS 3 //additional steps to continue after homing sensor triggered
-#define FEED_STEPS 70  //The amount to travel before starting the homing cycle. Should be less than (80 - FEED_HOMING_OFFSET_STEPS)
-#define FEED_OVERSTEP_THRESHOLD 90 //if we have gone this many steps without hitting a homing node, something is wrong. Throw an overstep error
+#define FEED_HOMING_OFFSET_STEPS 5 //additional steps to continue after homing sensor triggered
+#define FEED_STEPS 60  //The amount to travel before starting the homing cycle. Should be less than (80 - FEED_HOMING_OFFSET_STEPS)
+#define FEED_OVERSTEP_THRESHOLD 140 //if we have gone this many steps without hitting a homing node, something is wrong. Throw an overstep error
 #define FEED_DONE_SIGNAL 12   // Writes HIGH Signal When Feed is done. Used for mods like AirDrop
 
 #define FEED_MOTOR_SPEED 90 //range of 1-100
@@ -63,13 +66,13 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 1000 //mA - 1000 is default 1 amp. 1000=1amp, 1100=1.1amp 900=.9amp, etc
-#define SORT_CURRENT 1100 //mA - 1100 is default 1.1 amp.
+#define FEED_CURRENT 1200 //mA - 1000 is default 1amp. 1100=1.1amp, 900=.9amp, etc
+#define SORT_CURRENT 1200 //mA - 1100 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
 #define AIR_DROP_ENABLED false //enables airdrop
 
-#define AUTO_MOTORSTANDBY_TIMEOUT 60 // 0 = disabled; The time in seconds to wait after no motor movement before putting motors in standby
+#define AUTO_MOTORSTANDBY_TIMEOUT 0 // 0 = disabled; The time in seconds to wait after no motor movement before putting motors in standby
 
 //ARDUINO CONFIGURATIONS
 //number of steps between chutes. With the 8 and 10 slot attachments, 20 is the default. 
@@ -120,6 +123,7 @@ long autoMotorStandbyTimeout = AUTO_MOTORSTANDBY_TIMEOUT;
 
 int feedCurrent = FEED_CURRENT;
 int sortCurrent = SORT_CURRENT;
+
 
 int feedSpeed = FEED_MOTOR_SPEED; //represents a number between 1-100
 int feedSteps = FEED_STEPS;
@@ -209,11 +213,14 @@ void setup() {
   feedmotorUART.microsteps(FEED_MICROSTEPS); 
   feedmotorUART.pwm_autoscale(true);
   feedmotorUART.en_spreadCycle(false);   // false = StealthChop / true = SpreadCycle
+  feedmotorUART.ihold(2);
 
+ // feedmotorUART.ihold(4);
   sortmotorUART.rms_current(SORT_CURRENT);       // Set motor RMS current
   sortmotorUART.microsteps(SORT_MICROSTEPS); 
   sortmotorUART.pwm_autoscale(true);    // Needed for stealthChop
   sortmotorUART.en_spreadCycle(false);   // false = StealthChop / true = SpreadCycle
+  sortmotorUART.ihold(2);
 
     //uint8_t temperature = sortmotorUART.
   //Serial.print(F("SORT microsteps: "));   Serial.println(sortmotorUART.microsteps());
@@ -358,8 +365,7 @@ void checkSerial(){
           resetCommand();
          return;
       } 
-
- if(input.startsWith("status")){
+     if(input.startsWith("status")){
         Serial.print(F("SORT microsteps: "));   Serial.println(sortmotorUART.microsteps());
         Serial.print(F("SORT current: "));   Serial.println(sortmotorUART.rms_current()); 
         Serial.print(F("SORT Stealth: "));   Serial.println(sortmotorUART.stealth()); 
@@ -388,12 +394,11 @@ void checkSerial(){
             if(sortCurrent>1800){
               sortCurrent=1800;
             }
-          feedmotorUART.rms_current(sortCurrent);       // Set motor RMS current
+          sortmotorUART.rms_current(sortCurrent);       // Set motor RMS current
            Serial.print("ok\n");
          resetCommand();
         return;
        }
-
       if (input.startsWith("sortto:")) {
           input.replace("sortto:", "");
           moveSorterToPosition(input.toInt());
@@ -414,7 +419,7 @@ void checkSerial(){
       }
 
       if (input.startsWith("getconfig")) {
-          Serial.print("{\"FeedMotorCurrent\":");
+        Serial.print("{\"FeedMotorCurrent\":");
         Serial.print(feedCurrent);
 
         Serial.print(",\"FeedMotorSpeed\":");
