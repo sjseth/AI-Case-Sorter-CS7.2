@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250416.1 ///
+/// VERSION CS 7.2.250417.3.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -11,7 +11,7 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250416.1"
+#define FIRMWARE_VERSION "7.2.250417.3.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -63,7 +63,7 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 900 //mA - 900 is default .9 amp. 1000=1amp, 1100=1.1amp, etc
+#define FEED_CURRENT 1000 //mA - 1000 is default 1amp. 1100=1.1amp, 900=.9amp, etc
 #define SORT_CURRENT 1100 //mA - 1100 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
@@ -117,6 +117,10 @@ int slotDropDelay = SLOT_DROP_DELAY;
 int dropDelay =  airDropEnabled ? feedCyclePostDelay : slotDropDelay;
 int feedDirection = FEED_IN_REVERSE == false;
 long autoMotorStandbyTimeout = AUTO_MOTORSTANDBY_TIMEOUT;
+
+int feedCurrent = FEED_CURRENT;
+int sortCurrent = SORT_CURRENT;
+
 
 int feedSpeed = FEED_MOTOR_SPEED; //represents a number between 1-100
 int feedSteps = FEED_STEPS;
@@ -355,8 +359,40 @@ void checkSerial(){
           resetCommand();
          return;
       } 
-
-
+     if(input.startsWith("status")){
+        Serial.print(F("SORT microsteps: "));   Serial.println(sortmotorUART.microsteps());
+        Serial.print(F("SORT current: "));   Serial.println(sortmotorUART.rms_current()); 
+        Serial.print(F("SORT Stealth: "));   Serial.println(sortmotorUART.stealth()); 
+        
+        Serial.print(F("FEED microsteps: "));   Serial.println(feedmotorUART.microsteps());
+        Serial.print(F("FEED current: "));   Serial.println(feedmotorUART.rms_current()); 
+        Serial.print(F("FEED Stealth: "));   Serial.println(feedmotorUART.stealth()); 
+        resetCommand();
+        return;
+     }
+      
+       if(input.startsWith("setFeedCurrent:")){
+            input.replace("setFeedCurrent:", "");
+            feedCurrent = input.toInt();
+            if(feedCurrent>1800){
+              feedCurrent=1800;
+            }
+          feedmotorUART.rms_current(feedCurrent);       // Set motor RMS current
+           Serial.print("ok\n");
+         resetCommand();
+        return;
+       }
+      if(input.startsWith("setSortCurrent:")){
+            input.replace("setSortCurrent:", "");
+            sortCurrent = input.toInt();
+            if(sortCurrent>1800){
+              sortCurrent=1800;
+            }
+          feedmotorUART.rms_current(sortCurrent);       // Set motor RMS current
+           Serial.print("ok\n");
+         resetCommand();
+        return;
+       }
       if (input.startsWith("sortto:")) {
           input.replace("sortto:", "");
           moveSorterToPosition(input.toInt());
@@ -377,12 +413,17 @@ void checkSerial(){
       }
 
       if (input.startsWith("getconfig")) {
-     
-        Serial.print("{\"FeedMotorSpeed\":");
+        Serial.print("{\"FeedMotorCurrent\":");
+        Serial.print(feedCurrent);
+
+        Serial.print(",\"FeedMotorSpeed\":");
         Serial.print(feedSpeed);
 
         Serial.print(",\"FeedCycleSteps\":");
         Serial.print(feedSteps);
+
+        Serial.print(",\"SortMotorCurrent\":");
+        Serial.print(sortCurrent);
 
         Serial.print(",\"SortMotorSpeed\":");
         Serial.print(sortSpeed);
