@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250417.1 ///
+/// VERSION CS 7.2.250418.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -66,8 +66,8 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 1200 //mA - 1000 is default 1amp. 1100=1.1amp, 900=.9amp, etc
-#define SORT_CURRENT 1200 //mA - 1100 is default 1.1 amp.
+#define FEED_CURRENT 1000 //mA - 1000 is default 1amp. 1100=1.1amp, 900=.9amp, etc
+#define SORT_CURRENT 1000 //mA - 1100 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
 #define AIR_DROP_ENABLED false //enables airdrop
