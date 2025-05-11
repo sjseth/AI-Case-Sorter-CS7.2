@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250417.3.1 ///
+/// VERSION CS 7.2.250511.4.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -11,10 +11,11 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250418.1"
+#define FIRMWARE_VERSION "7.2.250511.4.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
+#define CASEFAN_SW_CTRL false //whether speed controls show in the software
 
 #define CAMERA_LED_PWM 11 //the output pin for the digital PWM 
 #define CAMERA_LED_LEVEL  200 //camera brightness if using digital PWM, otherwise ignored 
@@ -65,7 +66,7 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 900 //mA - 1000 is default 1amp. 1100=1.1amp, 900=.9amp, etc
+#define FEED_CURRENT 900 //mA - 1100 is default 1amp. 1100=1.1amp, 900=.9amp, etc
 #define SORT_CURRENT 900 //mA - 1000 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
@@ -122,7 +123,7 @@ long autoMotorStandbyTimeout = AUTO_MOTORSTANDBY_TIMEOUT;
 
 int feedCurrent = FEED_CURRENT;
 int sortCurrent = SORT_CURRENT;
-
+bool enableSftCurrCtrl = true;
 
 int feedSpeed = FEED_MOTOR_SPEED; //represents a number between 1-100
 int feedSteps = FEED_STEPS;
@@ -376,8 +377,8 @@ void checkSerial(){
         return;
      }
       
-       if(input.startsWith("setFeedCurrent:")){
-            input.replace("setFeedCurrent:", "");
+       if(input.startsWith("feedmotorcurrent:")){
+            input.replace("feedmotorcurrent:", "");
             feedCurrent = input.toInt();
             if(feedCurrent>1800){
               feedCurrent=1800;
@@ -387,8 +388,8 @@ void checkSerial(){
          resetCommand();
         return;
        }
-      if(input.startsWith("setSortCurrent:")){
-            input.replace("setSortCurrent:", "");
+      if(input.startsWith("sortmotorcurrent:")){
+            input.replace("sortmotorcurrent:", "");
             sortCurrent = input.toInt();
             if(sortCurrent>1800){
               sortCurrent=1800;
@@ -463,7 +464,12 @@ void checkSerial(){
         Serial.print(",\"AutoMotorStandbyTimeout\":");
         Serial.print(autoMotorStandbyTimeout);
 
-        
+        Serial.print(",\"CaseFanSpeedEnabled\":");
+        Serial.print(CASEFAN_SW_CTRL);
+
+        Serial.print(",\"CaseFanLevel\":");
+        Serial.print(caseFanLevel);
+
         Serial.print(",\"CameraLEDLevel\":");
         Serial.print(cameraLEDLevel);
   
@@ -1115,10 +1121,9 @@ void adjustCameraLED(int level)
 void adjustFanLevel(int level)
 {
   fanPercentConversion = level * 2.55;
-  level = 255 - fanPercentConversion; // the mosfet works backwards. 0 is full speed 255 is slowest. 
+  level = fanPercentConversion;
   analogWrite(CASEFAN_PWM, level);
-  //Serial.println(level);
-  caseFanLevel = level;
+  //caseFanLevel = level;
  }
 
 
