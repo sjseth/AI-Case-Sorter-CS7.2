@@ -1,20 +1,21 @@
-/// VERSION CS 7.2.250418.1 ///
+/// VERSION CS 7.2.250515.4.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
+
 //You may need to add the TMCStepper library to your Arduino IDE.
 //In the Sketch menu, select Include Library -> Manage Libraries
 //In the library manager search for "TMCStepper". Find the TMCStepper library by teemuatlut and click the Install button. 
 //You may have to close and reopen the Arduino IDE before the library is recognized
 //at this time of this firmware version we are using TMCStepper 0.7.3.
-#include <TMCStepper.h> 
-
+#include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250418.1"
+#define FIRMWARE_VERSION "7.2.250515.4.1"
 
-#define CASEFAN_PWM A1 //controls case fan speed
+#define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
+#define CASEFAN_SW_CTRL false //whether speed controls show in the software
 
 #define CAMERA_LED_PWM 11 //the output pin for the digital PWM 
 #define CAMERA_LED_LEVEL  200 //camera brightness if using digital PWM, otherwise ignored 
@@ -22,12 +23,11 @@
 #define FEED_SENSOR 10 //the proximity sensor under the feed wheel
 #define FEED_DIRPIN 8 //DIRECTION signal for the feed motor direction
 #define FEED_STEPPIN 7 //PULSE signal for the feed motor steps
-#define FEED_ENABLE 9 //Feed motor enable controll pin
+#define FEED_ENABLE A0 //Feed motor enable controll pin
 
-//UART COMS
+//UART COMMS
 #define FEED_UART_RX A4 //FEED UART RX COMMS 
 #define FEED_UART_TX A5 //FEED UART TX COMMS 
-
 #define FEED_IN_REVERSE false //set to true to reverse direction of feed motor. 
 #define FEED_MICROSTEPS 16  //how many microsteps the controller is configured for. 
 #define FEED_HOMING_SENSOR A3  //connects to the feed wheel homing sensor
@@ -66,8 +66,8 @@
 //STEPPER MOTOR UART SETTINGS
 #define R_SENSE 0.11f 
 #define DRIVER_ADDRESS 0b00 
-#define FEED_CURRENT 1000 //mA - 1000 is default 1amp. 1100=1.1amp, 900=.9amp, etc
-#define SORT_CURRENT 1000 //mA - 1100 is default 1.1 amp.
+#define FEED_CURRENT 900 //mA - 1100 is default 1amp. 1100=1.1amp, 900=.9amp, etc
+#define SORT_CURRENT 900 //mA - 1000 is default 1.1 amp.
 
 //AIRDROP / 12v signaling
 #define AIR_DROP_ENABLED false //enables airdrop
@@ -105,6 +105,13 @@
 // This gives time for the brass to clear the sort tube before moving the sort arm. 
 #define SLOT_DROP_DELAY 100
 
+//DEBOUNCE is a feature to counteract case bounce which can occur if the machine runs out of brass and a peice of brass drops a distance from
+//from the collator to the feeder. It developes speed and bounces of the prox sensor triggering the sensor and bouncing back up to cause a jam. 
+//this seeks to eliminate that by adding a small pause to let the case bounce and settle. 
+
+#define DEBOUNCE_TIMEOUT 300 //default 500. The number of milliseconds without sensor activation (meaning no brass in the feed) required to trigger a debounce pause.
+
+#define DEBOUNCE_PAUSE_TIME 500 //default 500.  Set to 0 to disable. The number of milliseconds to pause to wait for case to settle. 
 
 ///END OF USER CONFIGURATIONS ///
 ///DO NOT EDIT BELOW THIS LINE ///
@@ -123,7 +130,7 @@ long autoMotorStandbyTimeout = AUTO_MOTORSTANDBY_TIMEOUT;
 
 int feedCurrent = FEED_CURRENT;
 int sortCurrent = SORT_CURRENT;
-
+bool enableSftCurrCtrl = true;
 
 int feedSpeed = FEED_MOTOR_SPEED; //represents a number between 1-100
 int feedSteps = FEED_STEPS;
@@ -174,8 +181,6 @@ bool sorterIsHomed = false;
 
 int slotDelayCalc = 0;
 
-
-
 bool IsTestCycle=false;
 bool IsSortTestCycle=false;
 unsigned long testCycleInterval=0;
@@ -185,6 +190,13 @@ unsigned long theTime;
 unsigned long timeSinceLastSortMove;
 unsigned long timeSinceLastMotorMove;
 unsigned long msgResetTimer;
+
+//debounce variables
+unsigned long lastTrigger = millis();
+int triggerTimeout = DEBOUNCE_TIMEOUT;
+int debounceTime= DEBOUNCE_PAUSE_TIME;
+bool proxActivated = false;
+bool sensorDelay = false;
 
 
 TMC2209Stepper sortmotorUART(SORT_UART_RX, SORT_UART_TX, R_SENSE, DRIVER_ADDRESS);
@@ -273,6 +285,7 @@ void setup() {
 
 void loop() {
    checkSerial();
+   getProxState();
    runSortMotor();
    onSortComplete();
    scheduleRun();
@@ -377,8 +390,8 @@ void checkSerial(){
         return;
      }
       
-       if(input.startsWith("setFeedCurrent:")){
-            input.replace("setFeedCurrent:", "");
+       if(input.startsWith("feedmotorcurrent:")){
+            input.replace("feedmotorcurrent:", "");
             feedCurrent = input.toInt();
             if(feedCurrent>1800){
               feedCurrent=1800;
@@ -388,8 +401,8 @@ void checkSerial(){
          resetCommand();
         return;
        }
-      if(input.startsWith("setSortCurrent:")){
-            input.replace("setSortCurrent:", "");
+      if(input.startsWith("sortmotorcurrent:")){
+            input.replace("sortmotorcurrent:", "");
             sortCurrent = input.toInt();
             if(sortCurrent>1800){
               sortCurrent=1800;
@@ -464,14 +477,42 @@ void checkSerial(){
         Serial.print(",\"AutoMotorStandbyTimeout\":");
         Serial.print(autoMotorStandbyTimeout);
 
-        
+        Serial.print(",\"CaseFanSpeedEnabled\":");
+        Serial.print(CASEFAN_SW_CTRL);
+
+        Serial.print(",\"CaseFanLevel\":");
+        Serial.print(caseFanLevel);
+
         Serial.print(",\"CameraLEDLevel\":");
         Serial.print(cameraLEDLevel);
+
+        Serial.print(",\"DebounceTimeout\":");
+        Serial.print(triggerTimeout);
+
+        Serial.print(",\"DebouncePauseTime\":");
+        Serial.print(debounceTime);
   
         Serial.print("}\n");
         resetCommand();
         return;      
       }
+
+        if (input.startsWith("debounceTimeout:")) {
+          input.replace("debounceTimeout:", "");
+          triggerTimeout = input.toInt();
+          Serial.print("ok\n");
+          resetCommand();
+          return;
+        }
+
+        if (input.startsWith("debounceTime:")) {
+          input.replace("debounceTime:", "");
+          debounceTime = input.toInt();
+          Serial.print("ok\n");
+          resetCommand();
+          return;
+        }
+
 
        //set feed speed. Values 1-100. Def 60
       if (input.startsWith("feedspeed:")) {
@@ -868,7 +909,8 @@ void onFeedComplete(){
 void scheduleRun(){
  
   if(FeedScheduled==true && IsFeeding==false){
-    if(digitalRead(FEED_SENSOR) == FEEDSENSOR_TYPE || forceFeed==true || FEEDSENSOR_ENABLED==false){
+    //if(digitalRead(FEED_SENSOR) == FEEDSENSOR_TYPE || forceFeed==true || FEEDSENSOR_ENABLED==false){
+      if(readyToFeed()){
       //set run variables
       IsFeedError=false;
       FeedSteps = feedMicroSteps;
@@ -890,6 +932,43 @@ void scheduleRun(){
     }
   }
 }
+
+
+
+void getProxState(){
+
+  //if the sensor is triggered, update the last trigger time and set the variable proxActivated
+  if(digitalRead(FEED_SENSOR) == FEEDSENSOR_TYPE){
+      proxActivated=true;
+      lastTrigger = millis();
+      return;
+  }
+
+  //sensor is not triggered, set the offTimer and set the variable to false
+  proxActivated=false;
+    
+  //check to see if the time since last trigger is longer than the timeout, if so set the delay variable. 
+  if(millis() - lastTrigger > triggerTimeout){
+    sensorDelay = true;
+  }
+}
+
+bool readyToFeed()
+{
+  if(!(proxActivated==true || forceFeed==true || FEEDSENSOR_ENABLED==false)){
+    return false;
+  }
+
+  //sensorDelay is calcualted in the getProxState() state method above. 
+  if(sensorDelay){
+        delay(debounceTime);
+        sensorDelay = false;
+        return false;
+  }
+   return true;
+}
+
+
 void runFeedMotor() {
   if(SortInProgress){
     return;
@@ -1097,7 +1176,7 @@ void MotorStandByCheck(){
 
   if(theTime - timeSinceLastMotorMove > (autoMotorStandbyTimeout*1000) ) {
      digitalWrite(FEED_ENABLE, HIGH);
-      digitalWrite(SORT_ENABLE, HIGH);
+     digitalWrite(SORT_ENABLE, HIGH);
   }
 }
 
@@ -1116,10 +1195,9 @@ void adjustCameraLED(int level)
 void adjustFanLevel(int level)
 {
   fanPercentConversion = level * 2.55;
-  level = 255 - fanPercentConversion; // the mosfet works backwards. 0 is full speed 255 is slowest. 
+  level = fanPercentConversion;
   analogWrite(CASEFAN_PWM, level);
-  //Serial.println(level);
-  caseFanLevel = level;
+  //caseFanLevel = level;
  }
 
 

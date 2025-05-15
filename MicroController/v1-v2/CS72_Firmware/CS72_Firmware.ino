@@ -1,21 +1,21 @@
-/// VERSION CS 7.2.250511.4.1 ///
+/// VERSION CS 7.2.250515.3.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
-
 //You may need to add the TMCStepper library to your Arduino IDE.
 //In the Sketch menu, select Include Library -> Manage Libraries
 //In the library manager search for "TMCStepper". Find the TMCStepper library by teemuatlut and click the Install button. 
 //You may have to close and reopen the Arduino IDE before the library is recognized
 //at this time of this firmware version we are using TMCStepper 0.7.3.
-#include <TMCStepper.h>
+#include <TMCStepper.h> 
+
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250511.4.1"
+#define FIRMWARE_VERSION "7.2.250515.3.1"
 
-#define CASEFAN_PWM 9 //controls case fan speed
+#define CASEFAN_PWM A1 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
-#define CASEFAN_SW_CTRL false //whether speed controls show in the software
+#define CASEFAN_SW_CTRL false; //enables software control (not available on v1-v3.)
 
 #define CAMERA_LED_PWM 11 //the output pin for the digital PWM 
 #define CAMERA_LED_LEVEL  200 //camera brightness if using digital PWM, otherwise ignored 
@@ -23,11 +23,12 @@
 #define FEED_SENSOR 10 //the proximity sensor under the feed wheel
 #define FEED_DIRPIN 8 //DIRECTION signal for the feed motor direction
 #define FEED_STEPPIN 7 //PULSE signal for the feed motor steps
-#define FEED_ENABLE A0 //Feed motor enable controll pin
+#define FEED_ENABLE 9 //Feed motor enable controll pin
 
-//UART COMMS
+//UART COMS
 #define FEED_UART_RX A4 //FEED UART RX COMMS 
 #define FEED_UART_TX A5 //FEED UART TX COMMS 
+
 #define FEED_IN_REVERSE false //set to true to reverse direction of feed motor. 
 #define FEED_MICROSTEPS 16  //how many microsteps the controller is configured for. 
 #define FEED_HOMING_SENSOR A3  //connects to the feed wheel homing sensor
@@ -39,6 +40,7 @@
 #define FEED_STEPS 60  //The amount to travel before starting the homing cycle. Should be less than (80 - FEED_HOMING_OFFSET_STEPS)
 #define FEED_OVERSTEP_THRESHOLD 140 //if we have gone this many steps without hitting a homing node, something is wrong. Throw an overstep error
 #define FEED_DONE_SIGNAL 12   // Writes HIGH Signal When Feed is done. Used for mods like AirDrop
+
 
 #define FEED_MOTOR_SPEED 90 //range of 1-100
 //FEED MOTOR SPEED / ACCELLERATION SETTINGS (DISABLED BY DEFAULT)
@@ -105,6 +107,13 @@
 // This gives time for the brass to clear the sort tube before moving the sort arm. 
 #define SLOT_DROP_DELAY 100
 
+//DEBOUNCE is a feature to counteract case bounce which can occur if the machine runs out of brass and a peice of brass drops a distance from
+//from the collator to the feeder. It developes speed and bounces of the prox sensor triggering the sensor and bouncing back up to cause a jam. 
+//this seeks to eliminate that by adding a small pause to let the case bounce and settle. 
+
+#define DEBOUNCE_TIMEOUT 300 //default 500. The number of milliseconds without sensor activation (meaning no brass in the feed) required to trigger a debounce pause.
+
+#define DEBOUNCE_PAUSE_TIME 500 //default 500.  Set to 0 to disable. The number of milliseconds to pause to wait for case to settle. 
 
 ///END OF USER CONFIGURATIONS ///
 ///DO NOT EDIT BELOW THIS LINE ///
@@ -174,8 +183,6 @@ bool sorterIsHomed = false;
 
 int slotDelayCalc = 0;
 
-
-
 bool IsTestCycle=false;
 bool IsSortTestCycle=false;
 unsigned long testCycleInterval=0;
@@ -185,6 +192,13 @@ unsigned long theTime;
 unsigned long timeSinceLastSortMove;
 unsigned long timeSinceLastMotorMove;
 unsigned long msgResetTimer;
+
+//debounce variables
+unsigned long lastTrigger = millis();
+int triggerTimeout = DEBOUNCE_TIMEOUT;
+int debounceTime= DEBOUNCE_PAUSE_TIME;
+bool proxActivated = false;
+bool sensorDelay = false;
 
 
 TMC2209Stepper sortmotorUART(SORT_UART_RX, SORT_UART_TX, R_SENSE, DRIVER_ADDRESS);
@@ -273,6 +287,7 @@ void setup() {
 
 void loop() {
    checkSerial();
+   getProxState();
    runSortMotor();
    onSortComplete();
    scheduleRun();
@@ -472,11 +487,34 @@ void checkSerial(){
 
         Serial.print(",\"CameraLEDLevel\":");
         Serial.print(cameraLEDLevel);
+
+        Serial.print(",\"DebounceTimeout\":");
+        Serial.print(triggerTimeout);
+
+        Serial.print(",\"DebouncePauseTime\":");
+        Serial.print(debounceTime);
   
         Serial.print("}\n");
         resetCommand();
         return;      
       }
+
+        if (input.startsWith("debounceTimeout:")) {
+          input.replace("debounceTimeout:", "");
+          triggerTimeout = input.toInt();
+          Serial.print("ok\n");
+          resetCommand();
+          return;
+        }
+
+        if (input.startsWith("debounceTime:")) {
+          input.replace("debounceTime:", "");
+          debounceTime = input.toInt();
+          Serial.print("ok\n");
+          resetCommand();
+          return;
+        }
+
 
        //set feed speed. Values 1-100. Def 60
       if (input.startsWith("feedspeed:")) {
@@ -873,7 +911,8 @@ void onFeedComplete(){
 void scheduleRun(){
  
   if(FeedScheduled==true && IsFeeding==false){
-    if(digitalRead(FEED_SENSOR) == FEEDSENSOR_TYPE || forceFeed==true || FEEDSENSOR_ENABLED==false){
+    //if(digitalRead(FEED_SENSOR) == FEEDSENSOR_TYPE || forceFeed==true || FEEDSENSOR_ENABLED==false){
+      if(readyToFeed()){
       //set run variables
       IsFeedError=false;
       FeedSteps = feedMicroSteps;
@@ -895,6 +934,43 @@ void scheduleRun(){
     }
   }
 }
+
+
+
+void getProxState(){
+
+  //if the sensor is triggered, update the last trigger time and set the variable proxActivated
+  if(digitalRead(FEED_SENSOR) == FEEDSENSOR_TYPE){
+      proxActivated=true;
+      lastTrigger = millis();
+      return;
+  }
+
+  //sensor is not triggered, set the offTimer and set the variable to false
+  proxActivated=false;
+    
+  //check to see if the time since last trigger is longer than the timeout, if so set the delay variable. 
+  if(millis() - lastTrigger > triggerTimeout){
+    sensorDelay = true;
+  }
+}
+
+bool readyToFeed()
+{
+  if(!(proxActivated==true || forceFeed==true || FEEDSENSOR_ENABLED==false)){
+    return false;
+  }
+
+  //sensorDelay is calcualted in the getProxState() state method above. 
+  if(sensorDelay){
+        delay(debounceTime);
+        sensorDelay = false;
+        return false;
+  }
+   return true;
+}
+
+
 void runFeedMotor() {
   if(SortInProgress){
     return;
@@ -1102,7 +1178,7 @@ void MotorStandByCheck(){
 
   if(theTime - timeSinceLastMotorMove > (autoMotorStandbyTimeout*1000) ) {
      digitalWrite(FEED_ENABLE, HIGH);
-      digitalWrite(SORT_ENABLE, HIGH);
+     digitalWrite(SORT_ENABLE, HIGH);
   }
 }
 
