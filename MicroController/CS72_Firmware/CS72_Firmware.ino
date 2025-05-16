@@ -675,7 +675,7 @@ void checkSerial(){
         Serial.print(" ok\n");
         return;
       }
-       if (input.startsWith("version")) {
+      if (input.startsWith("version")) {
        
         Serial.print(FIRMWARE_VERSION);
         Serial.print("\n");
