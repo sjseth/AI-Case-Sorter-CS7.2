@@ -8,9 +8,9 @@ This project is an adaptation of the [CS7.1 Case Sorter](https://github.com/sjse
 
 If you are interested in building this project, there are two main options you can choose from. 
 
-<span style="color:gold">**Option #1:**</span> Buy the full build kit which includes all the non-3d printed parts needed for the assembly. Choose this option if you are starting from scratch and only want to build one machine. This will usually be the cheapest option in this case. The complete build kit is available here: [CS7.2 Complete Build Kit](https://shop.sjseth.com/products/cs7-2-complete-build-kit).  **Note you will still need to provide your own 12v 5amp powersupply and a computer to run the software.* 
+<font style="color:gold">**Option #1:**</font> Buy the full build kit which includes all the non-3d printed parts needed for the assembly. Choose this option if you are starting from scratch and only want to build one machine. This will usually be the cheapest option in this case. The complete build kit is available here: [CS7.2 Complete Build Kit](https://shop.sjseth.com/products/cs7-2-complete-build-kit).  **Note you will still need to provide your own 12v 5amp powersupply and a computer to run the software.* 
 
-<span style="color:gold">**Option #2:** </span>Buy the essentials kit which includes only those parts which can be sourced from SJSeth Solutions. If you choose this route, you will need to referr to the [CS7.2 Parts List](https://www.reloadingrecipes.com/Partslist/Display/1) and acquire all the parts necessary for the build. The essentials kit can be purchase here: [CS7.2 Essentials Kit](https://shop.sjseth.com/products/cs7-2-essentials-kit)
+<font style="color:gold">**Option #2:** </font>Buy the essentials kit which includes only those parts which can be sourced from SJSeth Solutions. If you choose this route, you will need to referr to the [CS7.2 Parts List](https://www.reloadingrecipes.com/Partslist/Display/1) and acquire all the parts necessary for the build. The essentials kit can be purchase here: [CS7.2 Essentials Kit](https://shop.sjseth.com/products/cs7-2-essentials-kit)
 
 ### Step 2. Print the parts needed for your build:
 
