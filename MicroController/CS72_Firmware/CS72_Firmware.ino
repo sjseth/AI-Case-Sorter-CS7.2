@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250515.4.1 ///
+/// VERSION CS 7.2.250529.4.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -11,7 +11,7 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250515.4.1"
+#define FIRMWARE_VERSION "7.2.250529.4.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -958,7 +958,9 @@ bool readyToFeed()
   if(!(proxActivated==true || forceFeed==true || FEEDSENSOR_ENABLED==false)){
     return false;
   }
-
+  if(forceFeed==true){
+    return true;
+  }
   //sensorDelay is calcualted in the getProxState() state method above. 
   if(sensorDelay){
         delay(debounceTime);
