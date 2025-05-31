@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250529.4.1 ///
+/// VERSION CS 7.2.250531.4.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -11,7 +11,7 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250529.4.1"
+#define FIRMWARE_VERSION "7.2.250531.4.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -40,8 +40,8 @@
 #define FEED_OVERSTEP_THRESHOLD 140 //if we have gone this many steps without hitting a homing node, something is wrong. Throw an overstep error
 #define FEED_DONE_SIGNAL 12   // Writes HIGH Signal When Feed is done. Used for mods like AirDrop
 
-#define FEED_MOTOR_SPEED 90 //range of 1-100
 //FEED MOTOR SPEED / ACCELLERATION SETTINGS (DISABLED BY DEFAULT)
+#define FEED_MOTOR_SPEED 90 //range of 1-100
 #define FEED_ACC_SLOPE 32  //2 steps * 16 MicroStes
 #define ACC_FEED_ENABLED false //enabled or disables feed motor accelleration. 
 
@@ -57,7 +57,7 @@
 #define SORT_HOMING_SENSOR_TYPE 0 //1=NO (normally open) default switch, 0=NC (normally closed) (optical switches)
 #define SORT_HOMING_ENABLED true //home sorter on startup and 0
 #define SORT_HOMING_OFFSET_STEPS 0 //additional steps to continue after homing sensor triggered
-#define SORT_MOTOR_SPEED 90 //range of 1-100
+#define SORT_MOTOR_SPEED 94 //range of 1-100
 //SORT MOTOR SPEED / ACCELLERATION SETTINGS (ENABLED BY DEFAULT)
 #define ACC_SORT_ENABLED true // default true
 #define ACC_FACTOR 1200 //1200 is default factor
@@ -955,12 +955,16 @@ void getProxState(){
 
 bool readyToFeed()
 {
-  if(!(proxActivated==true || forceFeed==true || FEEDSENSOR_ENABLED==false)){
-    return false;
-  }
-  if(forceFeed==true){
+  //if feedsensor is not enabled, or it is a forcefeed,  we are always ready!
+  if(FEEDSENSOR_ENABLED==false || forceFeed==true){
     return true;
   }
+
+  //if no brass is detected, we are not ready
+  if(proxActivated == false){
+    return false;
+  }
+
   //sensorDelay is calcualted in the getProxState() state method above. 
   if(sensorDelay){
         delay(debounceTime);
