@@ -29,8 +29,16 @@ Refer to the instructions in the [Instructions Folder](./instructions/) for each
 * [Sorter](./Instructions/CS7.2%20Sorter%20Assembly%20Guide.pdf)
 * [Electronics Enclosure](./Instructions/CS7.2%20Electronics%20Box%20Assembly.pdf)
 
-## CS7.2 Build Series Videos
 
+
+### Step 4. Install the software and read the manual
+You need to register for an account to download the software. You can do this at [https://www.reloadingrecipes.com/HeadstampSorter](https://www.reloadingrecipes.com/HeadstampSorter). 
+
+Here is the link to the latest software manual: [AI Headstamp Sorter Application Guide for v1.1.53](./Instructions/AI%20Headstamp%20Sorter%20Application%20Guide_11531.pdf)
+
+
+
+## CS7.2 Build Series Videos
 ### Camera Assembly
 [![Camera Assembly](https://img.youtube.com/vi/B2Un%2Dj%2DgyE4/hqdefault.jpg)](https://youtu.be/B2Un%2Dj%2DgyE4)
 
@@ -48,3 +56,4 @@ Refer to the instructions in the [Instructions Folder](./instructions/) for each
 
 ### Final Assembly - putting it all together. 
 [![Putting it all together](https://img.youtube.com/vi/NzxutLAYxv8/hqdefault.jpg)](https://youtu.be/NzxutLAYxv8)
+
