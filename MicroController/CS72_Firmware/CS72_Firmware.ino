@@ -1,4 +1,4 @@
-/// VERSION CS 7.2.250531.4.1 ///
+/// VERSION CS 7.2.250711.4.1 ///
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.48 or newer
 
 #include <Wire.h>
@@ -11,7 +11,7 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250531.4.1"
+#define FIRMWARE_VERSION "7.2.250711.4.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -94,7 +94,7 @@
 // Time in milliseconds to wait before sending "done" response to serialport (allows for everything to stop moving before taking the picture): runs after the feed_cycle_complete signal
 // With AirDrop mod enabled, it needs about 20-30MS. If airdrop is not enabled, it should be closer to 50-70. 
 // If you are getting blurred pictures, increase this value. 
-#define FEED_CYCLE_NOTIFICATION_DELAY 80 
+#define FEED_CYCLE_NOTIFICATION_DELAY 120 
 
 //when airdrop is enabled, this value is used instead of SLOT_DROP_DELAY but does the same thing
 //Usually can be 100 or lower, increase value if brass not clearing the tube before it moves to next slot. 
@@ -103,7 +103,7 @@
 // number of MS to wait after feedcycle before moving sort arm.
 // Prevents slinging brass. 
 // This gives time for the brass to clear the sort tube before moving the sort arm. 
-#define SLOT_DROP_DELAY 450
+#define SLOT_DROP_DELAY 550
 
 //DEBOUNCE is a feature to counteract case bounce which can occur if the machine runs out of brass and a peice of brass drops a distance from
 //from the collator to the feeder. It developes speed and bounces of the prox sensor triggering the sensor and bouncing back up to cause a jam. 
