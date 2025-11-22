@@ -1,8 +1,8 @@
 # CS7.2 Firmware
 
 ## Installing the firmware
-1. Install Arduino Studio
-2. Download the latest firmware zip file from this folder
+1. Install Arduino Studio (https://www.arduino.cc/en/software/)
+2. Download the latest firmware zip file from this folder (https://github.com/sjseth/AI-Case-Sorter-CS7.2/tree/main/MicroController)
 3. Extract the zipfile and navigate into the folder and double-click on the CS72_Firmware.ino file to launch the file in the studio
 4. In Arduino Studio, open the library panel (the icon on the left side which looks like books) and search for TMCStepper
 5. Install the TMCStepper Library
