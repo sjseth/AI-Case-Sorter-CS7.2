@@ -4,9 +4,9 @@
 
 The board versions can be found in the lower left corner of the PCB. 
 
-![alt text](image.png)
+![alt text](img/image.png)
 
-![alt text](image-2.png)
+![alt text](img/image-2.png)
 
 
 # FAQ
