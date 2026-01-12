@@ -19,6 +19,19 @@ This repo contains all the stl files needed to complete your build. Those files 
 * [EZ Build For Complete Build Kit](../Full%20Parts%20Kit%20Build.zip)
 * [EZ Build for Essentials Kit](../Essentials%20Build.zip)
 
+#### Step 2a. Reuse parts from your CS7.1 Build:
+
+If you have a 7.1 build, these parts are reusable in 7.2
+- Light Shade
+- Feed Tubes
+- Feed Bracket
+- Feed Wheels (caliber sets)
+- Drop Tube
+- Tension Cam Shim
+- Drive Gear
+- Sorting Bins
+- Pole Mount Brackets (though the new ones have wire management channels)
+
 ### Step 3. Assemble The Sorter
 
 Refer to the instructions in the [Instructions Folder](./instructions/) for each of the assemblies.
