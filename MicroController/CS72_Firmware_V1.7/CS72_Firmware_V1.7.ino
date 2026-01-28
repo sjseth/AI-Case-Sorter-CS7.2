@@ -1,5 +1,6 @@
-/// VERSION CS 7.2.251226.7.1 ///
-/// This version is for CS7.1 boards with version at or above 1.7. 
+/// VERSION CS 7.2.260128.7.1 ///
+/// Version is  {make}.{date yymmdd}.{minimum boardversion}.{dayversion}
+/// This version is for CS7.1 boards with version at or above 1.7. (yellow or black boards, not purple) 
 /// REQUIRES AI SORTER SOFTWARE VERSION 1.1.53 or newer
 
 #include <Wire.h>
@@ -12,7 +13,7 @@
 #include <TMCStepper.h>
 #include <SoftwareSerial.h>   
 
-#define FIRMWARE_VERSION "7.2.250925.6.1"
+#define FIRMWARE_VERSION "7.2.260128.7.1"
 
 #define CASEFAN_PWM 9 //controls case fan speed
 #define CASEFAN_LEVEL 100 //0-100 
@@ -102,14 +103,14 @@
 
 // Used to send signal to add-ons when feed cycle completes (used by airdrop mod). 
 // IF NOT USING MODS, SET TO 0. With Airdrop set to 60-100 (length of the airblast)
-#define FEED_CYCLE_COMPLETE_SIGNALTIME 100 
+#define FEED_CYCLE_COMPLETE_SIGNALTIME 0 
 
 // The amount of time to wait after the feed completes before sending the FEED_CYCLE_COMPLETE SIGNAL
 // IF NOT USING MODS, SET TO 0. with Airdrop set to 30-50 which allows the brass to start falling before sending the blast of air. 
-#define FEED_CYCLE_COMPLETE_PRESIGNALDELAY 30
+#define FEED_CYCLE_COMPLETE_PRESIGNALDELAY 0
 
 // Time in milliseconds to wait before sending "done" response to serialport (allows for everything to stop moving before taking the picture): runs after the feed_cycle_complete signal
-// With AirDrop mod enabled, it needs about 20-30MS. If airdrop is not enabled, it should be closer to 50-70. 
+// With AirDrop mod enabled, it needs about 20-30MS. If airdrop is not enabled, it should be closer to 80-140. 
 // If you are getting blurred pictures, increase this value. 
 #define FEED_CYCLE_NOTIFICATION_DELAY 120 
 
@@ -120,13 +121,13 @@
 // number of MS to wait after feedcycle before moving sort arm.
 // Prevents slinging brass. 
 // This gives time for the brass to clear the sort tube before moving the sort arm. 
-#define SLOT_DROP_DELAY 550
+#define SLOT_DROP_DELAY 300
 
 //DEBOUNCE is a feature to counteract case bounce which can occur if the machine runs out of brass and a peice of brass drops a distance from
 //from the collator to the feeder. It developes speed and bounces of the prox sensor triggering the sensor and bouncing back up to cause a jam. 
 //this seeks to eliminate that by adding a small pause to let the case bounce and settle. 
 
-#define DEBOUNCE_TIMEOUT 300 //default 500. The number of milliseconds without sensor activation (meaning no brass in the feed) required to trigger a debounce pause.
+#define DEBOUNCE_TIMEOUT 500 //default 500. The number of milliseconds without sensor activation (meaning no brass in the feed) required to trigger a debounce pause.
 
 #define DEBOUNCE_PAUSE_TIME 500 //default 500.  Set to 0 to disable. The number of milliseconds to pause to wait for case to settle. 
 
