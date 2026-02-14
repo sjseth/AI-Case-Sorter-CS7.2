@@ -259,7 +259,7 @@ void setup() {
   feedmotorUART.ihold(2);
   feedmotorUART.intpol(true);
  
-  sortmotorUART.rms_current(1000);       // Set motor RMS current
+  sortmotorUART.rms_current(SORT_CURRENT);       // Set motor RMS current
   sortmotorUART.microsteps(SORT_MICROSTEPS); 
   sortmotorUART.pwm_autoscale(true);    // Needed for stealthChop
   sortmotorUART.en_spreadCycle(false);   // false = StealthChop / true = SpreadCycle
@@ -422,6 +422,9 @@ void checkSerial(){
        if(input.startsWith("feedmotorcurrent:")){
             input.replace("feedmotorcurrent:", "");
             feedCurrent = input.toInt();
+            if(feedCurrent<100){
+              feedCurrent=100;
+            }
             if(feedCurrent>1800){
               feedCurrent=1800;
             }
@@ -433,6 +436,9 @@ void checkSerial(){
       if(input.startsWith("sortmotorcurrent:")){
             input.replace("sortmotorcurrent:", "");
             sortCurrent = input.toInt();
+            if(sortCurrent<100){
+              sortCurrent=100;
+            }
             if(sortCurrent>1800){
               sortCurrent=1800;
             }
@@ -651,6 +657,12 @@ void checkSerial(){
       if (input.startsWith("fan:")) {
         input.replace("fan:", "");
         caseFanLevel = input.toInt();
+        if(caseFanLevel < 0){
+          caseFanLevel = 0;
+        }
+        if(caseFanLevel > 100){
+          caseFanLevel = 100;
+        }
         adjustFanLevel(caseFanLevel);
         Serial.print(F("ok\n"));
         resetCommand();
@@ -1184,6 +1196,7 @@ void homeSortMotor(){
 void stepFeedMotor(){
       if (checkStallGuardWhileMoving(FEED_DIAG_PIN, feedStepCounter)) {
         triggerFeedStall(F("error:feed stallguard (homing)"));
+        return;
       }
     digitalWrite(FEED_ENABLE, LOW);
     digitalWrite(FEED_STEPPIN, HIGH);
@@ -1268,10 +1281,12 @@ void adjustCameraLED(int level)
 
 void adjustFanLevel(int level)
 {
+  level = level < 0 ? 0 : level;
+  level = level > 100 ? 100 : level;
   fanPercentConversion = level * 2.55;
   level = fanPercentConversion;
   analogWrite(CASEFAN_PWM, level);
-  //caseFanLevel = level;
+  caseFanLevel = (int)(fanPercentConversion / 2.55);
  }
 
 
@@ -1311,7 +1326,7 @@ bool checkStallGuardWhileMoving(
     return false;
   }
   // With INPUT_PULLUP, DIAG (open-drain) typically asserts LOW
-  return digitalRead(diagPin) == HIGH;
+  return diagActive(diagPin);
 }
 
 
@@ -1353,4 +1368,3 @@ void triggerSortStall(const __FlashStringHelper* msg) {
 
   Serial.println(msg);
 }
-
